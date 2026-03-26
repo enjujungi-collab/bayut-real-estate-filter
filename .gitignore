@@ -1,0 +1,30 @@
+# 환경변수 (절대 커밋 금지)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 가상환경
+venv/
+.venv/
+env/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 생성된 PDF
+*.pdf
