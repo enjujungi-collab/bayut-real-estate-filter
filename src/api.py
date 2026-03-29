@@ -6,7 +6,7 @@ from .models import Property, SearchFilters
 
 load_dotenv()
 
-BASE_URL = "https://uae-real-estate2.p.rapidapi.com"
+BASE_URL = "https://propertyfinder-uae-data.p.rapidapi.com"
 
 
 def _get_headers() -> dict:
@@ -14,48 +14,74 @@ def _get_headers() -> dict:
     if not key or key == "your_rapidapi_key_here":
         raise ValueError(
             "RAPIDAPI_KEY가 설정되지 않았습니다.\n"
-            ".env 파일에 RAPIDAPI_KEY=<your_key> 를 추가해주세요.\n"
-            "키 발급: https://rapidapi.com → 'bayut' 검색 → 구독"
+            ".env 파일에 RAPIDAPI_KEY=<your_key> 를 추가해주세요."
         )
     return {
         "x-rapidapi-key": key,
-        "x-rapidapi-host": "uae-real-estate2.p.rapidapi.com",
-        "Content-Type": "application/json",
+        "x-rapidapi-host": "propertyfinder-uae-data.p.rapidapi.com",
+        "User-Agent": "RapidAPI/4.0",
     }
 
 
 def search_locations(query: str) -> list[dict]:
-    """위치 이름으로 location_id 조회 (자동완성)"""
+    """위치 이름으로 location_id 조회"""
     with httpx.Client(timeout=10) as client:
         resp = client.get(
-            f"{BASE_URL}/locations_search",
-            params={"query": query, "langs": "en"},
+            f"{BASE_URL}/autocomplete-location",
+            params={"query": query},
             headers=_get_headers(),
         )
-        resp.raise_for_status()
+        _handle_errors(resp)
         data = resp.json()
-        # 결과 형태: [{"id": 5, "name": "Dubai", "slug": "dubai", ...}, ...]
-        return data if isinstance(data, list) else data.get("results", [])
+        return data.get("data", [])
 
 
 def search_properties(filters: SearchFilters, page: int = 0) -> tuple[list[Property], int]:
     """매물 검색. (결과 목록, 전체 개수) 반환"""
-    payload = filters.to_api_payload()
+    endpoint = "/search-buy" if filters.purpose == "for-sale" else "/search-rent"
+
+    params = {"page": page + 1}
+
+    # 위치
+    if filters.locations_ids:
+        params["location_id"] = str(filters.locations_ids[0])
+
+    # 가격
+    if filters.price_min:
+        params["price_min"] = filters.price_min
+    if filters.price_max:
+        params["price_max"] = filters.price_max
+
+    # 방 개수
+    if filters.rooms and len(filters.rooms) == 1:
+        params["bedrooms"] = filters.rooms[0]
+
+    # 면적 (sqft → sqm 변환: PropertyFinder는 sqft 사용)
+    if filters.area_min:
+        params["size_min"] = filters.area_min
+    if filters.area_max:
+        params["size_max"] = filters.area_max
 
     with httpx.Client(timeout=15) as client:
-        resp = client.post(
-            f"{BASE_URL}/properties_search",
-            params={"page": page, "langs": "en"},
-            json=payload,
+        resp = client.get(
+            f"{BASE_URL}{endpoint}",
+            params=params,
             headers=_get_headers(),
         )
         _handle_errors(resp)
         data = resp.json()
 
-    hits = data.get("hits", data) if isinstance(data, dict) else data
-    total = data.get("nbHits", len(hits)) if isinstance(data, dict) else len(hits)
+    props_raw = data.get("data", [])
+    if not isinstance(props_raw, list):
+        props_raw = []
 
-    properties = [_parse_property(h) for h in hits]
+    # 활성 매물 + 가격 있는 것만 필터
+    props_raw = [p for p in props_raw
+                 if p.get("is_available", True)
+                 and (p.get("price", {}) or {}).get("value", 0) > 0]
+
+    total = len(props_raw)
+    properties = [_parse_property(p, filters.purpose) for p in props_raw]
     return properties, total
 
 
@@ -63,16 +89,21 @@ def get_property_detail(property_id: str) -> Optional[Property]:
     """단일 매물 상세 정보 조회"""
     with httpx.Client(timeout=10) as client:
         resp = client.get(
-            f"{BASE_URL}/property_info",
-            params={"id": property_id, "langs": "en"},
+            f"{BASE_URL}/property-details",
+            params={"property_id": property_id},
             headers=_get_headers(),
         )
         _handle_errors(resp)
         data = resp.json()
 
-    if not data:
+    prop = data.get("data")
+    if not prop:
         return None
-    return _parse_property(data)
+    if isinstance(prop, list):
+        prop = prop[0] if prop else None
+    if not prop:
+        return None
+    return _parse_property(prop, "for-sale")
 
 
 def _handle_errors(resp: httpx.Response) -> None:
@@ -83,65 +114,82 @@ def _handle_errors(resp: httpx.Response) -> None:
     resp.raise_for_status()
 
 
-def _parse_property(data: dict) -> Property:
-    location_parts = []
-    for key in ("district", "city", "country"):
-        val = data.get(key, {})
-        if isinstance(val, dict):
-            name = val.get("name_en") or val.get("name") or ""
-        else:
-            name = str(val) if val else ""
-        if name:
-            location_parts.append(name)
-    location = ", ".join(location_parts) or data.get("location", "-")
+def _parse_property(data: dict, purpose: str = "for-sale") -> Property:
+    # 위치
+    addr = data.get("address", {}) or {}
+    location = addr.get("full_name", "-")
 
-    # ── URL: slug 그대로 사용, 없으면 id 기반 fallback ──────────
-    slug = (data.get("slug") or "").strip().strip("/")
-    if slug:
-        # slug가 이미 .html 포함 여부와 무관하게 깔끔하게 조합
-        url = f"https://www.bayut.com/{slug}"
-        if not url.endswith(".html") and not url.endswith("/"):
-            url += "/"
+    # URL — property_url 필드 직접 사용 (항상 유효한 PropertyFinder 링크)
+    url = data.get("property_url", "")
+    if not url:
+        prop_id = data.get("property_id", "")
+        url = f"https://www.propertyfinder.ae/en/search?q={prop_id}"
+
+    # 이미지
+    photos = [img for img in (data.get("images") or []) if img][:5]
+
+    # 에이전트
+    agent_info = data.get("agent_details", {}) or {}
+    agent_name = agent_info.get("name") or data.get("agent_name") or None
+
+    # 가격
+    price_info = data.get("price", {}) or {}
+    if isinstance(price_info, dict):
+        price = int(price_info.get("value") or 0)
+        currency = price_info.get("currency", "AED")
     else:
-        url = f"https://www.bayut.com/property/details-{data.get('id', '')}.html"
+        price = int(price_info or 0)
+        currency = "AED"
 
-    # ── 이미지 URL 수집 ──────────────────────────────────────────
-    photos = []
-    for raw in data.get("photos", []):
-        if isinstance(raw, dict):
-            img_url = (raw.get("url") or raw.get("main") or raw.get("thumbnail") or "")
-        else:
-            img_url = str(raw)
-        img_url = img_url.strip()
-        if img_url and img_url.startswith("http"):
-            photos.append(img_url)
+    # 방/욕실/면적
+    bedrooms_raw = data.get("bedrooms")
+    try:
+        bedrooms = int(bedrooms_raw) if bedrooms_raw is not None else None
+    except (ValueError, TypeError):
+        bedrooms = None
 
-    # ── 에이전트 연락처 ──────────────────────────────────────────
-    agent = data.get("agent", {}) if isinstance(data.get("agent"), dict) else {}
-    agency = data.get("agency", {}) if isinstance(data.get("agency"), dict) else {}
-    phone = agent.get("phone") or agent.get("mobile") or agent.get("phone_number") or ""
+    bathrooms_raw = data.get("bathrooms")
+    try:
+        bathrooms = int(bathrooms_raw) if bathrooms_raw is not None else None
+    except (ValueError, TypeError):
+        bathrooms = None
+
+    size_raw = data.get("size")
+    try:
+        area_sqft = round(float(size_raw)) if size_raw else None
+    except (ValueError, TypeError):
+        area_sqft = None
+
+    # 제목/설명/카테고리
+    title = data.get("title") or location or "-"
+    description = data.get("description")
+    category = data.get("property_type", "Apartment")
+
+    # 완공 여부
+    is_new = data.get("is_new_construction")
+    is_completed = not is_new if is_new is not None else None
 
     return Property(
-        id=str(data.get("id", "")),
-        title=data.get("title_en") or data.get("title") or "-",
-        purpose=data.get("purpose", "-"),
-        category=data.get("category", {}).get("name_en", "-") if isinstance(data.get("category"), dict) else str(data.get("category", "-")),
+        id=str(data.get("property_id") or ""),
+        title=title,
+        purpose=purpose,
+        category=category,
         location=location,
-        price=int(data.get("price", 0) or 0),
-        currency=data.get("currency", "AED"),
-        bedrooms=data.get("rooms"),
-        bathrooms=data.get("baths"),
-        area_sqft=data.get("area"),
-        is_completed=data.get("is_completed"),
+        price=price,
+        currency=currency,
+        bedrooms=bedrooms,
+        bathrooms=bathrooms,
+        area_sqft=area_sqft,
+        is_completed=is_completed,
         url=url,
-        agent_name=agent.get("name") or None,
-        agency_name=agency.get("name_en") or agency.get("name") or None,
-        agent_phone=phone or None,
-        amenities=[a.get("name", "") for a in data.get("amenities", []) if isinstance(a, dict)],
-        photos=photos[:5],
-        description=data.get("description_en") or data.get("description") or None,
-        floor=data.get("floor_number") or data.get("floor") or None,
-        total_floors=data.get("total_floors") or None,
-        furnishing=data.get("furnishing") or None,
-        permit_number=data.get("permit_number") or data.get("reference_number") or None,
+        agent_name=agent_name,
+        agency_name=None,
+        agent_phone=None,
+        amenities=[],
+        photos=photos,
+        description=description,
+        floor=None,
+        total_floors=None,
+        furnishing=None,
+        permit_number=data.get("reference_number"),
     )
