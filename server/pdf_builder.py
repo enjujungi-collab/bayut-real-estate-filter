@@ -32,8 +32,12 @@ def _reg_fonts():
     global FR, FB
     if FR in pdfmetrics.getRegisteredFontNames():
         return
-    for p in ["/System/Library/Fonts/Supplemental/AppleGothic.ttf",
-              "/Library/Fonts/Arial Unicode.ttf"]:
+    _dir = os.path.dirname(__file__)
+    for p in [
+        os.path.join(_dir, "fonts", "NanumGothic.ttf"),        # bundled — works on Linux + macOS
+        "/System/Library/Fonts/Supplemental/AppleGothic.ttf",  # macOS system fallback
+        "/Library/Fonts/Arial Unicode.ttf",
+    ]:
         if os.path.exists(p):
             try:
                 pdfmetrics.registerFont(TTFont(FR, p))
