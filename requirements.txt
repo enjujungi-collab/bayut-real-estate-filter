@@ -8,3 +8,5 @@ uvicorn==0.30.0
 anthropic==0.34.0
 matplotlib==3.8.4
 staticmap==0.5.7
+arabic-reshaper==3.0.0
+python-bidi==0.4.2

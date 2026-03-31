@@ -31,26 +31,55 @@ from reportlab.pdfbase.ttfonts import TTFont
 FR = "KorR"
 FB = "KorB"
 
-def _reg_fonts():
-    global FR, FB
-    if FR in pdfmetrics.getRegisteredFontNames():
-        return
+# language → (regular_font_name, bold_font_name)
+_FONTS: dict = {}
+
+def _reg_all_fonts():
+    global _FONTS
     _dir = os.path.dirname(__file__)
+
+    # Korean / Latin (NanumGothic)
     for p in [
-        os.path.join(_dir, "fonts", "NanumGothic.ttf"),        # bundled — works on Linux + macOS
-        "/System/Library/Fonts/Supplemental/AppleGothic.ttf",  # macOS system fallback
+        os.path.join(_dir, "fonts", "NanumGothic.ttf"),
+        "/System/Library/Fonts/Supplemental/AppleGothic.ttf",
         "/Library/Fonts/Arial Unicode.ttf",
     ]:
         if os.path.exists(p):
             try:
-                pdfmetrics.registerFont(TTFont(FR, p))
-                pdfmetrics.registerFont(TTFont(FB, p))
-                return
+                pdfmetrics.registerFont(TTFont("KorR", p))
+                pdfmetrics.registerFont(TTFont("KorB", p))
+                _FONTS["ko"] = ("KorR", "KorB")
+                _FONTS["en"] = ("KorR", "KorB")
+                break
             except Exception:
                 continue
-    FR, FB = "Helvetica", "Helvetica-Bold"
 
-_reg_fonts()
+    # Chinese (NotoSansSC)
+    zh_path = os.path.join(_dir, "fonts", "NotoSansSC-Regular.ttf")
+    if os.path.exists(zh_path):
+        try:
+            pdfmetrics.registerFont(TTFont("ZhR", zh_path))
+            pdfmetrics.registerFont(TTFont("ZhB", zh_path))
+            _FONTS["zh"] = ("ZhR", "ZhB")
+        except Exception:
+            pass
+
+    # Arabic (NotoSansArabic)
+    ar_path = os.path.join(_dir, "fonts", "NotoSansArabic-Regular.ttf")
+    if os.path.exists(ar_path):
+        try:
+            pdfmetrics.registerFont(TTFont("ArR", ar_path))
+            pdfmetrics.registerFont(TTFont("ArB", ar_path))
+            _FONTS["ar"] = ("ArR", "ArB")
+        except Exception:
+            pass
+
+    # Fallback for any language not loaded
+    fallback = _FONTS.get("ko") or _FONTS.get("en") or ("Helvetica", "Helvetica-Bold")
+    for lang in ("ko", "en", "zh", "ar"):
+        _FONTS.setdefault(lang, fallback)
+
+_reg_all_fonts()
 
 # ── 색상 ─────────────────────────────────────────────────────
 CN = colors.HexColor("#0B2545")   # navy
@@ -72,28 +101,31 @@ def _s(name, **kw):
     base.update(kw)
     return ParagraphStyle(name, **base)
 
-S = {
-    "cover_t": _s("ct", fontName=FB, fontSize=26, textColor=CW, leading=32),
-    "cover_s": _s("cs", fontSize=12, textColor=CG, leading=16),
-    "cover_m": _s("cm", fontSize=9,  textColor=CW, leading=14),
-    "sec":     _s("sc", fontName=FB, fontSize=12, textColor=CN, spaceBefore=3, spaceAfter=2),
-    "h_num":   _s("hn", fontName=FB, fontSize=20, textColor=CG, leading=24),
-    "h_title": _s("ht", fontName=FB, fontSize=14, textColor=CN, leading=18),
-    "h_loc":   _s("hl", fontSize=9,  textColor=CM, leading=13),
-    "price":   _s("pr", fontName=FB, fontSize=20, textColor=CG, leading=24),
-    "psub":    _s("ps", fontSize=8,  textColor=CM, leading=11),
-    "lbl":     _s("lb", fontName=FB, fontSize=7.5,textColor=CM, leading=11),
-    "val":     _s("vl", fontSize=8.5,textColor=CT, leading=12),
-    "desc":    _s("dc", fontSize=8,  textColor=CT, leading=12),
-    "am":      _s("am", fontSize=7.5,textColor=CM, leading=11),
-    "url":     _s("ur", fontSize=7.5,textColor=CLINK, leading=11),
-    "th":      _s("th", fontName=FB, fontSize=8,  textColor=CW, leading=11, alignment=1),
-    "td":      _s("td", fontSize=7.5,textColor=CT, leading=11, alignment=1),
-    "td_l":    _s("tl", fontSize=7.5,textColor=CT, leading=11),
-    "fk":      _s("fk", fontName=FB, fontSize=8.5,textColor=CN, leading=13),
-    "fv":      _s("fv", fontSize=8.5,textColor=CT, leading=13),
-    "ctx":     _s("cx", fontSize=8,  textColor=CT, leading=12),
-}
+def _make_styles():
+    return {
+        "cover_t": _s("ct", fontName=FB, fontSize=26, textColor=CW, leading=32),
+        "cover_s": _s("cs", fontSize=12, textColor=CG, leading=16),
+        "cover_m": _s("cm", fontSize=9,  textColor=CW, leading=14),
+        "sec":     _s("sc", fontName=FB, fontSize=12, textColor=CN, spaceBefore=3, spaceAfter=2),
+        "h_num":   _s("hn", fontName=FB, fontSize=20, textColor=CG, leading=24),
+        "h_title": _s("ht", fontName=FB, fontSize=14, textColor=CN, leading=18),
+        "h_loc":   _s("hl", fontSize=9,  textColor=CM, leading=13),
+        "price":   _s("pr", fontName=FB, fontSize=20, textColor=CG, leading=24),
+        "psub":    _s("ps", fontSize=8,  textColor=CM, leading=11),
+        "lbl":     _s("lb", fontName=FB, fontSize=7.5,textColor=CM, leading=11),
+        "val":     _s("vl", fontSize=8.5,textColor=CT, leading=12),
+        "desc":    _s("dc", fontSize=8,  textColor=CT, leading=12),
+        "am":      _s("am", fontSize=7.5,textColor=CM, leading=11),
+        "url":     _s("ur", fontSize=7.5,textColor=CLINK, leading=11),
+        "th":      _s("th", fontName=FB, fontSize=8,  textColor=CW, leading=11, alignment=1),
+        "td":      _s("td", fontSize=7.5,textColor=CT, leading=11, alignment=1),
+        "td_l":    _s("tl", fontSize=7.5,textColor=CT, leading=11),
+        "fk":      _s("fk", fontName=FB, fontSize=8.5,textColor=CN, leading=13),
+        "fv":      _s("fv", fontSize=8.5,textColor=CT, leading=13),
+        "ctx":     _s("cx", fontSize=8,  textColor=CT, leading=12),
+    }
+
+S = _make_styles()
 
 
 # ── 이미지 로더 ───────────────────────────────────────────────
@@ -128,6 +160,21 @@ def _placeholder(w, h, text="No Image"):
     return tbl
 
 
+def _mpl_font(lang: str):
+    """Return matplotlib FontProperties for the given language, or None."""
+    _dir = os.path.dirname(__file__)
+    _map = {
+        "ko": os.path.join(_dir, "fonts", "NanumGothic.ttf"),
+        "zh": os.path.join(_dir, "fonts", "NotoSansSC-Regular.ttf"),
+        "ar": os.path.join(_dir, "fonts", "NotoSansArabic-Regular.ttf"),
+    }
+    path = _map.get(lang)
+    if path and os.path.exists(path):
+        from matplotlib.font_manager import FontProperties
+        return FontProperties(fname=path)
+    return None
+
+
 # ── 가격 차트 ─────────────────────────────────────────────────
 def _price_chart(price_history: list, prop_psf: Optional[float],
                  w_pts: float, h_pts: float, lang: str = "ko") -> Optional[Image]:
@@ -156,15 +203,24 @@ def _price_chart(price_history: list, prop_psf: Optional[float],
     ax.tick_params(labelsize=6)
     ax.set_ylabel("AED / ft²", fontsize=6, color="#6B7C93")
     T_chart = _t(lang)
-    ax.set_title(T_chart["price_chart_title"], fontsize=7,
-                 color="#0B2545", pad=4)
+    fp = _mpl_font(lang)
+    title_kw = {"fontsize": 7, "color": "#0B2545", "pad": 4}
+    if fp:
+        title_kw["fontproperties"] = fp
+    ax.set_title(T_chart["price_chart_title"], **title_kw)
     ax.grid(axis="y", linestyle="--", alpha=0.4, zorder=0)
     ax.spines[:].set_visible(False)
 
     if prop_psf:
+        legend_label = T_chart["this_prop"]
+        if lang == "ar":
+            legend_label = _reshape_ar(legend_label)
         ax.axhline(prop_psf, color="#E8A838", linewidth=1.2,
-                   linestyle="--", zorder=4, label=f"{T_chart['this_prop']} {prop_psf:,.0f}")
-        ax.legend(fontsize=5.5, loc="upper left", framealpha=0.7)
+                   linestyle="--", zorder=4, label=f"{legend_label} {prop_psf:,.0f}")
+        legend_kw = {"fontsize": 5.5, "loc": "upper left", "framealpha": 0.7}
+        if fp:
+            legend_kw["prop"] = fp
+        ax.legend(**legend_kw)
 
     plt.tight_layout(pad=0.3)
     buf = io.BytesIO()
@@ -523,8 +579,35 @@ TRANSLATIONS = {
     },
 }
 
+def _reshape_ar(text: str) -> str:
+    """Reshape Arabic text + apply bidi so it renders correctly in ReportLab."""
+    try:
+        import arabic_reshaper
+        from bidi.algorithm import get_display
+        return get_display(arabic_reshaper.reshape(text))
+    except Exception:
+        return text
+
+_ar_t_cache: dict | None = None
+
 def _t(lang: str) -> dict:
-    return TRANSLATIONS.get(lang, TRANSLATIONS["en"])
+    global _ar_t_cache
+    base = TRANSLATIONS.get(lang, TRANSLATIONS["en"])
+    if lang != "ar":
+        return base
+    if _ar_t_cache is not None:
+        return _ar_t_cache
+    reshaped: dict = {}
+    for k, v in base.items():
+        if isinstance(v, str):
+            reshaped[k] = _reshape_ar(v)
+        elif callable(v):
+            orig_fn = v
+            reshaped[k] = lambda n, f=orig_fn: _reshape_ar(f(n))
+        else:
+            reshaped[k] = v
+    _ar_t_cache = reshaped
+    return _ar_t_cache
 
 
 # ── 헤더/푸터 콜백 ────────────────────────────────────────────
@@ -618,6 +701,11 @@ def _filter_table(f, lang: str = "ko") -> Table:
 
 # ── 메인 ─────────────────────────────────────────────────────
 def build_portfolio_pdf(properties: list[dict], filters, output_path: str, language: str = "ko"):
+    global FR, FB, S, _ar_t_cache
+    FR, FB = _FONTS.get(language, _FONTS.get("en", ("Helvetica", "Helvetica-Bold")))
+    S = _make_styles()
+    _ar_t_cache = None  # reset so Arabic reshaping picks up fresh
+
     T = _t(language)
     generated_at = datetime.now().strftime(T["date_fmt"])
 
