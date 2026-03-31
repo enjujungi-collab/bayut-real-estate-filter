@@ -8,7 +8,7 @@ import sys
 from datetime import datetime
 from typing import Optional
 
-sys.setrecursionlimit(5000)
+sys.setrecursionlimit(10000)
 
 import matplotlib
 matplotlib.use("Agg")

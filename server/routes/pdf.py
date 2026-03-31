@@ -104,6 +104,8 @@ async def generate_pdf(req: PdfRequest):
         tmp.close()
         await asyncio.to_thread(build_portfolio_pdf, list(enriched), filters, tmp_path, req.language)
     except Exception as e:
+        import traceback
+        traceback.print_exc()   # Render 로그에 전체 스택 출력
         raise HTTPException(status_code=500, detail=f"PDF 생성 오류: {e}")
 
     from datetime import datetime
