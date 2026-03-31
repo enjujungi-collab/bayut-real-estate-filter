@@ -19,29 +19,34 @@
     #chat-messages::-webkit-scrollbar { width:4px; }
     #chat-messages::-webkit-scrollbar-thumb { background:#C8D6E8; border-radius:2px; }
     .chip { cursor:pointer; border:1px solid #C8D6E8; border-radius:20px; padding:6px 14px; font-size:12px; color:#0B2545; transition:all .2s; }
-    .chip:hover { background:#0B2545; color:#fff; border-color:#0B2545; }
+    .chip:hover, .chip:active { background:#0B2545; color:#fff; border-color:#0B2545; }
     .badge-sale { background:#0B2545; color:#fff; }
     .badge-rent { background:#E8A838; color:#fff; }
-    .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#ef4444; color:#fff; padding:10px 22px; border-radius:8px; font-size:14px; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; }
+    .toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#ef4444; color:#fff; padding:10px 22px; border-radius:8px; font-size:14px; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
     .toast.show { opacity:1; }
-    .lang-btn { padding:4px 10px; border-radius:6px; font-size:12px; font-weight:500; color:#9CA3AF; transition:all .2s; cursor:pointer; }
+    .lang-btn { padding:3px 8px; border-radius:6px; font-size:11px; font-weight:500; color:#9CA3AF; transition:all .2s; cursor:pointer; white-space:nowrap; }
     .lang-btn:hover { color:#fff; }
     .lang-btn.active { background:#E8A838; color:#0B2545; font-weight:700; }
+    /* 모바일 탭 배지 */
+    .tab-btn { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:8px 4px 4px; gap:2px; font-size:11px; color:#6B7C93; transition:color .2s; border:none; background:none; cursor:pointer; }
+    .tab-btn.active { color:#0B2545; }
+    .tab-btn.active svg { color:#E8A838; }
+    .result-badge { background:#E8A838; color:#0B2545; font-size:9px; font-weight:700; border-radius:999px; padding:1px 5px; }
   </style>
 </head>
-<body class="bg-gray-50 h-screen overflow-hidden flex flex-col">
+<body class="bg-gray-50 flex flex-col" style="height:100dvh; overflow:hidden;">
 
 <!-- 헤더 -->
-<header class="bg-[#0B2545] text-white px-6 py-3 flex items-center gap-3 shadow-md flex-shrink-0">
-  <div class="flex flex-col leading-none mr-2">
-    <div class="text-xl font-black text-white tracking-widest">ANAROCK</div>
+<header class="bg-[#0B2545] text-white px-4 py-2.5 flex items-center gap-2 shadow-md flex-shrink-0">
+  <div class="flex flex-col leading-none mr-1">
+    <div class="text-lg font-black text-white tracking-widest">ANAROCK</div>
     <div class="h-px bg-white opacity-50 my-0.5"></div>
-    <div class="text-[9px] text-white tracking-[0.25em] opacity-75">MIDDLE EAST</div>
+    <div class="text-[8px] text-white tracking-[0.25em] opacity-75">MIDDLE EAST</div>
   </div>
-  <div id="header-subtitle" class="text-sm text-gray-300">AI 부동산 매물 검색</div>
-  <div class="ml-auto flex items-center gap-1">
+  <div id="header-subtitle" class="text-xs text-gray-300 hidden sm:block">AI 부동산 매물 검색</div>
+  <div class="ml-auto flex items-center gap-0.5">
     <button class="lang-btn active" onclick="setLang('ko')">한국어</button>
-    <button class="lang-btn" onclick="setLang('en')">English</button>
+    <button class="lang-btn" onclick="setLang('en')">EN</button>
     <button class="lang-btn" onclick="setLang('zh')">中文</button>
     <button class="lang-btn" onclick="setLang('ar')">عربي</button>
   </div>
@@ -50,207 +55,205 @@
 <!-- 메인 레이아웃 -->
 <div class="flex flex-1 overflow-hidden">
 
-  <!-- 채팅 패널 -->
-  <aside class="w-[360px] flex-shrink-0 flex flex-col border-r border-gray-200 bg-white">
-    <!-- 메시지 목록 -->
+  <!-- 채팅 패널 — 모바일: 탭 전환, 데스크톱: 고정 사이드바 -->
+  <aside id="panel-chat" class="flex flex-col bg-white w-full md:w-[360px] md:flex-shrink-0 md:border-r md:border-gray-200">
     <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3">
-      <!-- 웰컴 -->
       <div id="welcome-bubble" class="chat-bubble-ai px-4 py-3 text-sm max-w-[90%]">
         안녕하세요! 원하시는 부동산 조건을 말씀해 주세요.<br>
         <span id="welcome-hint" class="text-gray-400 text-xs">예시 조건을 눌러보세요 👇</span>
       </div>
-      <!-- 예시 칩 -->
       <div id="chips" class="flex flex-col gap-2">
         <div class="chip text-xs" onclick="sendChip(this)">두바이 마리나 2베드 매매 150만~250만 AED</div>
         <div class="chip text-xs" onclick="sendChip(this)">팜 주메이라 빌라 임대 연 30만 AED 이하</div>
         <div class="chip text-xs" onclick="sendChip(this)">다운타운 두바이 스튜디오 완공 매매</div>
       </div>
     </div>
-    <!-- 입력창 -->
     <div class="p-3 border-t border-gray-100 bg-white">
       <div class="flex gap-2">
         <textarea
-          id="msg-input"
-          rows="2"
+          id="msg-input" rows="2"
           placeholder="매물 조건을 입력하세요…"
           class="flex-1 resize-none border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#0B2545] transition"
           onkeydown="handleKey(event)"
         ></textarea>
-        <button
-          id="send-btn"
-          onclick="sendMessage()"
-          class="bg-[#0B2545] text-white px-4 rounded-xl font-medium text-sm hover:bg-[#1a3a6a] transition disabled:opacity-40"
-        >전송</button>
+        <button id="send-btn" onclick="sendMessage()"
+          class="bg-[#0B2545] text-white px-4 rounded-xl font-medium text-sm hover:bg-[#1a3a6a] transition disabled:opacity-40">
+          전송
+        </button>
       </div>
     </div>
   </aside>
 
-  <!-- 결과 패널 -->
-  <main class="flex-1 flex flex-col overflow-hidden">
-    <!-- PDF 버튼 바 -->
-    <div id="action-bar" class="hidden px-6 py-3 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
-      <span id="result-summary" class="text-sm text-gray-500"></span>
-      <button
-        id="pdf-btn"
-        onclick="generatePdf()"
-        class="bg-[#E8A838] text-white px-5 py-2 rounded-lg font-medium text-sm hover:bg-[#d4972e] transition flex items-center gap-2"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <!-- 결과 패널 — 모바일: 탭 전환, 데스크톱: flex-1 -->
+  <main id="panel-results" class="hidden md:flex flex-col flex-1 overflow-hidden">
+    <div id="action-bar" class="hidden px-4 py-2.5 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
+      <span id="result-summary" class="text-xs text-gray-500"></span>
+      <button id="pdf-btn" onclick="generatePdf()"
+        class="bg-[#E8A838] text-white px-3 py-1.5 rounded-lg font-medium text-xs hover:bg-[#d4972e] transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z"/>
         </svg>
         <span id="pdf-btn-label">PDF 포트폴리오 생성</span>
       </button>
     </div>
-
-    <!-- 카드 그리드 -->
-    <div id="cards-area" class="flex-1 overflow-y-auto p-6">
-      <!-- 빈 상태 -->
+    <div id="cards-area" class="flex-1 overflow-y-auto p-4">
       <div id="empty-state" class="flex flex-col items-center justify-center h-full text-gray-400">
-        <svg class="w-16 h-16 mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-14 h-14 mb-3 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
             d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
         </svg>
-        <p id="empty-hint" class="text-sm">왼쪽 채팅에서 원하는 매물 조건을 입력하세요</p>
+        <p id="empty-hint" class="text-sm text-center px-4">왼쪽 채팅에서 원하는 매물 조건을 입력하세요</p>
       </div>
-      <!-- 카드 그리드 (동적) -->
-      <div id="card-grid" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+      <div id="card-grid" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
     </div>
   </main>
 </div>
+
+<!-- 모바일 하단 탭 바 (md 이상에서 숨김) -->
+<nav class="md:hidden flex-shrink-0 bg-white border-t border-gray-200 flex safe-pb" style="padding-bottom: env(safe-area-inset-bottom);">
+  <button id="tab-chat" class="tab-btn active" onclick="switchTab('chat')">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+    </svg>
+    <span id="tab-chat-label">채팅</span>
+  </button>
+  <button id="tab-results" class="tab-btn" onclick="switchTab('results')">
+    <div class="relative">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+      </svg>
+      <span id="result-badge" class="hidden result-badge absolute -top-1 -right-3">0</span>
+    </div>
+    <span id="tab-results-label">매물</span>
+  </button>
+</nav>
 
 <!-- 토스트 -->
 <div id="toast" class="toast"></div>
 
 <script>
-// ── UI 번역 테이블 ─────────────────────────────────────────────
 const UI = {
   ko: {
-    subtitle:    "AI 부동산 매물 검색",
-    welcome:     "안녕하세요! 원하시는 부동산 조건을 말씀해 주세요.",
-    hint:        "예시 조건을 눌러보세요 👇",
-    chips:       ["두바이 마리나 2베드 매매 150만~250만 AED", "팜 주메이라 빌라 임대 연 30만 AED 이하", "다운타운 두바이 스튜디오 완공 매매"],
-    placeholder: "매물 조건을 입력하세요…",
-    send:        "전송",
-    pdfBtn:      "PDF 포트폴리오 생성",
-    pdfLoading:  "생성 중…",
-    emptyHint:   "왼쪽 채팅에서 원하는 매물 조건을 입력하세요",
-    summary:     (n, t) => `전체 ${t?.toLocaleString() || ""}건 중 ${n}개 표시`,
-    forSale:     "매매", forRent: "임대",
-    completed:   "완공", offPlan: "분양중",
-    noImage:     "이미지 없음",
-    viewBtn:     "매물 페이지에서 보기 →",
-    baths:       (n) => `${n}욕`,
-    serverErr:   "서버 오류",
-    pdfErr:      "PDF 생성 오류",
-    chatErr:     "오류가 발생했습니다: ",
+    subtitle:       "AI 부동산 매물 검색",
+    welcome:        "안녕하세요! 원하시는 부동산 조건을 말씀해 주세요.",
+    hint:           "예시 조건을 눌러보세요 👇",
+    chips:          ["두바이 마리나 2베드 매매 150만~250만 AED", "팜 주메이라 빌라 임대 연 30만 AED 이하", "다운타운 두바이 스튜디오 완공 매매"],
+    placeholder:    "매물 조건을 입력하세요…",
+    send:           "전송",
+    pdfBtn:         "PDF 포트폴리오 생성",
+    pdfLoading:     "생성 중…",
+    emptyHint:      "채팅에서 원하는 매물 조건을 입력하세요",
+    summary:        (n, t) => `전체 ${t?.toLocaleString()||""}건 중 ${n}개 표시`,
+    forSale: "매매", forRent: "임대",
+    completed: "완공", offPlan: "분양중",
+    noImage: "이미지 없음", viewBtn: "매물 페이지에서 보기 →",
+    baths: (n) => `${n}욕`,
+    tabChat: "채팅", tabResults: "매물",
+    serverErr: "서버 오류", pdfErr: "PDF 생성 오류", chatErr: "오류: ",
   },
   en: {
-    subtitle:    "AI Property Search",
-    welcome:     "Hello! Tell me what kind of property you're looking for.",
-    hint:        "Try an example below 👇",
-    chips:       ["Dubai Marina 2BR for sale 1.5M–2.5M AED", "Palm Jumeirah villa for rent under 300K AED/yr", "Downtown Dubai studio ready for sale"],
-    placeholder: "Describe what you're looking for…",
-    send:        "Send",
-    pdfBtn:      "Generate PDF Portfolio",
-    pdfLoading:  "Generating…",
-    emptyHint:   "Enter your property criteria in the chat on the left",
-    summary:     (n, t) => `Showing ${n} of ${t?.toLocaleString() || ""} results`,
-    forSale:     "For Sale", forRent:   "For Rent",
-    completed:   "Ready",    offPlan:   "Off-Plan",
-    noImage:     "No Image",
-    viewBtn:     "View Listing →",
-    baths:       (n) => `${n} bath`,
-    serverErr:   "Server error",
-    pdfErr:      "PDF generation error",
-    chatErr:     "Error: ",
+    subtitle:       "AI Property Search",
+    welcome:        "Hello! Tell me what kind of property you're looking for.",
+    hint:           "Try an example below 👇",
+    chips:          ["Dubai Marina 2BR for sale 1.5M–2.5M AED", "Palm Jumeirah villa for rent under 300K AED/yr", "Downtown Dubai studio ready for sale"],
+    placeholder:    "Describe what you're looking for…",
+    send:           "Send",
+    pdfBtn:         "Generate PDF Portfolio",
+    pdfLoading:     "Generating…",
+    emptyHint:      "Enter your property criteria in the chat",
+    summary:        (n, t) => `Showing ${n} of ${t?.toLocaleString()||""} results`,
+    forSale: "For Sale", forRent: "For Rent",
+    completed: "Ready", offPlan: "Off-Plan",
+    noImage: "No Image", viewBtn: "View Listing →",
+    baths: (n) => `${n} bath`,
+    tabChat: "Chat", tabResults: "Results",
+    serverErr: "Server error", pdfErr: "PDF error", chatErr: "Error: ",
   },
   zh: {
-    subtitle:    "AI 房产搜索",
-    welcome:     "您好！请告诉我您想要的房产条件。",
-    hint:        "点击下方示例试试 👇",
-    chips:       ["迪拜码头2卧室出售 150万~250万 AED", "棕榈岛别墅出租 年租30万AED以下", "市中心单身公寓现房出售"],
-    placeholder: "请描述您的房产需求…",
-    send:        "发送",
-    pdfBtn:      "生成 PDF 报告",
-    pdfLoading:  "生成中…",
-    emptyHint:   "请在左侧聊天框输入您的房产条件",
-    summary:     (n, t) => `共 ${t?.toLocaleString() || ""} 套，显示 ${n} 套`,
-    forSale:     "出售", forRent:  "出租",
-    completed:   "现房", offPlan:  "期房",
-    noImage:     "暂无图片",
-    viewBtn:     "查看房源 →",
-    baths:       (n) => `${n}卫`,
-    serverErr:   "服务器错误",
-    pdfErr:      "PDF生成错误",
-    chatErr:     "错误：",
+    subtitle:       "AI 房产搜索",
+    welcome:        "您好！请告诉我您想要的房产条件。",
+    hint:           "点击下方示例试试 👇",
+    chips:          ["迪拜码头2卧室出售 150万~250万 AED", "棕榈岛别墅出租 年租30万AED以下", "市中心单身公寓现房出售"],
+    placeholder:    "请描述您的房产需求…",
+    send:           "发送",
+    pdfBtn:         "生成 PDF 报告",
+    pdfLoading:     "生成中…",
+    emptyHint:      "请在聊天框输入您的房产条件",
+    summary:        (n, t) => `共 ${t?.toLocaleString()||""} 套，显示 ${n} 套`,
+    forSale: "出售", forRent: "出租",
+    completed: "现房", offPlan: "期房",
+    noImage: "暂无图片", viewBtn: "查看房源 →",
+    baths: (n) => `${n}卫`,
+    tabChat: "对话", tabResults: "房源",
+    serverErr: "服务器错误", pdfErr: "PDF错误", chatErr: "错误：",
   },
   ar: {
-    subtitle:    "البحث عن العقارات بالذكاء الاصطناعي",
-    welcome:     "مرحباً! أخبرني بشروط العقار الذي تبحث عنه.",
-    hint:        "جرّب أحد الأمثلة أدناه 👇",
-    chips:       ["مارينا دبي 2 غرف للبيع 1.5M–2.5M AED", "فيلا نخلة جميرا للإيجار أقل من 300K AED", "استوديو وسط المدينة جاهز للبيع"],
-    placeholder: "صف ما تبحث عنه…",
-    send:        "إرسال",
-    pdfBtn:      "إنشاء ملف PDF",
-    pdfLoading:  "جاري الإنشاء…",
-    emptyHint:   "أدخل شروط البحث في المحادثة على اليسار",
-    summary:     (n, t) => `عرض ${n} من أصل ${t?.toLocaleString() || ""} نتيجة`,
-    forSale:     "للبيع", forRent:  "للإيجار",
-    completed:   "جاهز",  offPlan:  "على الخريطة",
-    noImage:     "لا توجد صورة",
-    viewBtn:     "عرض العقار →",
-    baths:       (n) => `${n} حمام`,
-    serverErr:   "خطأ في الخادم",
-    pdfErr:      "خطأ في إنشاء PDF",
-    chatErr:     "خطأ: ",
+    subtitle:       "البحث عن العقارات بالذكاء الاصطناعي",
+    welcome:        "مرحباً! أخبرني بشروط العقار الذي تبحث عنه.",
+    hint:           "جرّب أحد الأمثلة أدناه 👇",
+    chips:          ["مارينا دبي 2 غرف للبيع 1.5M–2.5M AED", "فيلا نخلة جميرا للإيجار أقل من 300K AED", "استوديو وسط المدينة جاهز للبيع"],
+    placeholder:    "صف ما تبحث عنه…",
+    send:           "إرسال",
+    pdfBtn:         "إنشاء ملف PDF",
+    pdfLoading:     "جاري الإنشاء…",
+    emptyHint:      "أدخل شروط البحث في المحادثة",
+    summary:        (n, t) => `عرض ${n} من أصل ${t?.toLocaleString()||""} نتيجة`,
+    forSale: "للبيع", forRent: "للإيجار",
+    completed: "جاهز", offPlan: "على الخريطة",
+    noImage: "لا توجد صورة", viewBtn: "عرض العقار →",
+    baths: (n) => `${n} حمام`,
+    tabChat: "محادثة", tabResults: "عقارات",
+    serverErr: "خطأ في الخادم", pdfErr: "خطأ PDF", chatErr: "خطأ: ",
   },
 };
 
-// ── 앱 상태 ───────────────────────────────────────────────────
 const state = {
-  history: [],
-  properties: [],
-  filters: null,
-  language: "ko",
-  loading: false,
-  pdfLoading: false,
+  history: [], properties: [], filters: null,
+  language: "ko", loading: false, pdfLoading: false, _total: 0,
 };
+
+// ── 모바일 탭 전환 ─────────────────────────────────────────────
+function switchTab(tab) {
+  const chat    = document.getElementById("panel-chat");
+  const results = document.getElementById("panel-results");
+  const btnChat = document.getElementById("tab-chat");
+  const btnRes  = document.getElementById("tab-results");
+
+  if (tab === "chat") {
+    chat.classList.remove("hidden");    chat.classList.add("flex");
+    results.classList.remove("flex");   results.classList.add("hidden");
+    btnChat.classList.add("active");    btnRes.classList.remove("active");
+  } else {
+    results.classList.remove("hidden"); results.classList.add("flex");
+    chat.classList.remove("flex");      chat.classList.add("hidden");
+    btnRes.classList.add("active");     btnChat.classList.remove("active");
+    document.getElementById("result-badge").classList.add("hidden");
+  }
+}
 
 // ── 언어 전환 ─────────────────────────────────────────────────
 function setLang(lang) {
   state.language = lang;
   const T = UI[lang] || UI.en;
-
-  // 헤더
   document.getElementById("header-subtitle").textContent = T.subtitle;
-  // 언어 버튼 active 표시
   document.querySelectorAll(".lang-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.textContent.trim() === {ko:"한국어",en:"English",zh:"中文",ar:"عربي"}[lang]);
+    const map = {ko:"한국어", en:"EN", zh:"中文", ar:"عربي"};
+    btn.classList.toggle("active", btn.textContent.trim() === map[lang]);
   });
-  // 웰컴 버블 (채팅 내역이 없을 때만 업데이트)
   const wb = document.getElementById("welcome-bubble");
-  if (wb) {
-    wb.innerHTML = T.welcome + '<br><span id="welcome-hint" class="text-gray-400 text-xs">' + T.hint + '</span>';
-  }
-  // 예시 칩
+  if (wb) wb.innerHTML = T.welcome + `<br><span id="welcome-hint" class="text-gray-400 text-xs">${T.hint}</span>`;
   const chips = document.getElementById("chips");
-  if (chips) {
-    chips.innerHTML = T.chips.map(c =>
-      `<div class="chip text-xs" onclick="sendChip(this)">${c}</div>`
-    ).join("");
-  }
-  // 입력창 placeholder
+  if (chips) chips.innerHTML = T.chips.map(c => `<div class="chip text-xs" onclick="sendChip(this)">${c}</div>`).join("");
   document.getElementById("msg-input").placeholder = T.placeholder;
-  // 전송 버튼
   if (!state.loading) document.getElementById("send-btn").textContent = T.send;
-  // PDF 버튼
   if (!state.pdfLoading) document.getElementById("pdf-btn-label").textContent = T.pdfBtn;
-  // 빈 상태 힌트
   document.getElementById("empty-hint").textContent = T.emptyHint;
-  // 카드 재렌더 (매물 있으면)
+  document.getElementById("tab-chat-label").textContent = T.tabChat;
+  document.getElementById("tab-results-label").textContent = T.tabResults;
   if (state.properties.length) renderCards(state.properties, state._total);
-  // html lang 속성
   document.documentElement.lang = lang;
 }
 
@@ -258,7 +261,6 @@ function setLang(lang) {
 function handleKey(e) {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
-
 function sendChip(el) {
   document.getElementById("msg-input").value = el.textContent.trim();
   document.getElementById("chips")?.remove();
@@ -269,36 +271,26 @@ async function sendMessage() {
   const input = document.getElementById("msg-input");
   const text = input.value.trim();
   if (!text || state.loading) return;
-
   input.value = "";
   appendBubble("user", text);
   state.history.push({ role: "user", content: text });
-
   setLoading(true);
-
   try {
     const resp = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text, history: state.history.slice(-10) }),
     });
-    if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.detail || UI[state.language].serverErr);
-    }
+    if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || UI[state.language].serverErr); }
     const data = await resp.json();
-
     appendBubble("assistant", data.reply);
     state.history.push({ role: "assistant", content: data.reply });
     state.filters = data.filters;
-    // Claude가 감지한 언어가 현재 선택과 다르면 자동으로 맞춰줌
-    if (data.language && data.language !== state.language) {
-      setLang(data.language);
-    }
+    if (data.language && data.language !== state.language) setLang(data.language);
     state.properties = data.properties || [];
     state._total = data.total;
-
     renderCards(state.properties, data.total);
+    // 모바일: 결과 있으면 결과 탭으로 자동 전환
+    if (state.properties.length && window.innerWidth < 768) switchTab("results");
   } catch(e) {
     appendBubble("assistant", UI[state.language].chatErr + e.message);
     showToast(e.message);
@@ -312,39 +304,28 @@ async function generatePdf() {
   const T = UI[state.language] || UI.en;
   state.pdfLoading = true;
   const btn = document.getElementById("pdf-btn");
-  btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+  btn.innerHTML = `<svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
     <span>${T.pdfLoading}</span>`;
   btn.disabled = true;
-
   try {
     const resp = await fetch("/api/pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        properties: state.properties,
-        filters: state.filters,
-        language: state.language,
-      }),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ properties: state.properties, filters: state.filters, language: state.language }),
     });
-    if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.detail || T.pdfErr);
-    }
+    if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || T.pdfErr); }
     const blob = await resp.blob();
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `bayut_portfolio_${Date.now()}.pdf`;
-    a.click();
+    a.href = url; a.download = `anarock_portfolio_${Date.now()}.pdf`; a.click();
     URL.revokeObjectURL(url);
   } catch(e) {
     showToast(T.pdfErr + ": " + e.message);
   } finally {
     state.pdfLoading = false;
     const T2 = UI[state.language] || UI.en;
-    btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
         d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z"/></svg>
       <span id="pdf-btn-label">${T2.pdfBtn}</span>`;
@@ -354,41 +335,36 @@ async function generatePdf() {
 
 function renderCards(properties, total) {
   const T = UI[state.language] || UI.en;
-  const grid = document.getElementById("card-grid");
-  const empty = document.getElementById("empty-state");
-  const bar   = document.getElementById("action-bar");
+  const grid    = document.getElementById("card-grid");
+  const empty   = document.getElementById("empty-state");
+  const bar     = document.getElementById("action-bar");
   const summary = document.getElementById("result-summary");
-
+  const badge   = document.getElementById("result-badge");
   grid.innerHTML = "";
-
   if (!properties.length) {
-    empty.classList.remove("hidden");
-    grid.classList.add("hidden");
-    bar.classList.add("hidden");
+    empty.classList.remove("hidden"); grid.classList.add("hidden"); bar.classList.add("hidden");
+    badge.classList.add("hidden");
     return;
   }
-
   empty.classList.add("hidden");
   grid.classList.remove("hidden");
-  bar.classList.remove("flex");
-  bar.classList.remove("hidden");
-  bar.classList.add("flex");
+  bar.classList.remove("flex","hidden"); bar.classList.add("flex");
   summary.textContent = T.summary(properties.length, total);
+  // 모바일 배지
+  badge.textContent = properties.length;
+  badge.classList.remove("hidden");
 
   properties.forEach((p, i) => {
-    const thumb = p.photos?.[0] || "";
+    const thumb  = p.photos?.[0] || "";
     const status = p.is_completed === true ? T.completed : p.is_completed === false ? T.offPlan : "";
     const purpose = p.purpose === "for-sale" ? T.forSale : T.forRent;
     const purposeClass = p.purpose === "for-sale" ? "badge-sale" : "badge-rent";
-    const amenities = (p.amenities || []).slice(0,4).join(" · ");
-
+    const amenities = (p.amenities||[]).slice(0,3).join(" · ");
     grid.innerHTML += `
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition group">
       <div class="relative">
-        ${thumb
-          ? `<img src="${thumb}" class="card-img group-hover:scale-105 transition duration-300" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />`
-          : ``}
-        <div class="card-img bg-gray-100 items-center justify-center text-gray-300 text-sm ${thumb ? 'hidden' : 'flex'}">${T.noImage}</div>
+        ${thumb ? `<img src="${thumb}" class="card-img group-hover:scale-105 transition duration-300" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />` : ""}
+        <div class="card-img bg-gray-100 items-center justify-center text-gray-300 text-sm ${thumb?"hidden":"flex"}">${T.noImage}</div>
         <div class="absolute top-2 left-2 flex gap-1">
           <span class="text-xs px-2 py-0.5 rounded-full font-medium ${purposeClass}">${purpose}</span>
           ${status ? `<span class="text-xs px-2 py-0.5 rounded-full bg-white text-gray-600 border">${status}</span>` : ""}
@@ -396,23 +372,23 @@ function renderCards(properties, total) {
         <div class="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">#${i+1}</div>
       </div>
       <div class="p-4">
-        <div class="text-lg font-bold text-[#E8A838] mb-0.5">${p.price_formatted || "-"}</div>
-        <div class="text-sm font-medium text-[#0B2545] mb-1 line-clamp-1">${p.title || p.location}</div>
-        <div class="text-xs text-gray-400 mb-3 flex items-center gap-1">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="text-lg font-bold text-[#E8A838] mb-0.5">${p.price_formatted||"-"}</div>
+        <div class="text-sm font-medium text-[#0B2545] mb-1 line-clamp-1">${p.title||p.location}</div>
+        <div class="text-xs text-gray-400 mb-2 flex items-center gap-1">
+          <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
           </svg>
-          ${p.location}
+          <span class="truncate">${p.location}</span>
         </div>
         <div class="flex gap-3 text-xs text-gray-500 mb-3">
           <span>🛏 ${p.bedrooms_label}</span>
-          <span>🚿 ${T.baths(p.bathrooms || "-")}</span>
+          <span>🚿 ${T.baths(p.bathrooms||"-")}</span>
           <span>📐 ${p.area_formatted}</span>
         </div>
         ${amenities ? `<div class="text-xs text-gray-400 truncate mb-3">${amenities}</div>` : ""}
         <a href="${p.url}" target="_blank"
-           class="block text-center text-xs bg-[#0B2545] text-white py-2 rounded-lg hover:bg-[#1a3a6a] transition">
+           class="block text-center text-xs bg-[#0B2545] text-white py-2 rounded-lg hover:bg-[#1a3a6a] transition active:bg-[#1a3a6a]">
           ${T.viewBtn}
         </a>
       </div>
@@ -425,21 +401,16 @@ function setLoading(on) {
   const T = UI[state.language] || UI.en;
   const btn = document.getElementById("send-btn");
   btn.disabled = on;
-
   if (on) {
     btn.textContent = "…";
     const el = document.createElement("div");
-    el.id = "typing-indicator";
-    el.className = "flex items-start gap-2";
-    el.innerHTML = `<div class="chat-bubble-ai px-4 py-3">
-      <div class="dot-typing"><span></span><span></span><span></span></div></div>`;
+    el.id = "typing-indicator"; el.className = "flex items-start gap-2";
+    el.innerHTML = `<div class="chat-bubble-ai px-4 py-3"><div class="dot-typing"><span></span><span></span><span></span></div></div>`;
     document.getElementById("chat-messages").appendChild(el);
     scrollChat();
-
     const grid = document.getElementById("card-grid");
     const empty = document.getElementById("empty-state");
-    empty.classList.add("hidden");
-    grid.classList.remove("hidden");
+    empty.classList.add("hidden"); grid.classList.remove("hidden");
     grid.innerHTML = Array(6).fill(`
       <div class="bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <div class="skeleton h-40 w-full"></div>
@@ -457,21 +428,18 @@ function setLoading(on) {
 
 function appendBubble(role, text) {
   const el = document.createElement("div");
-  el.className = `flex ${role === "user" ? "justify-end" : "justify-start"}`;
-  el.innerHTML = `<div class="chat-bubble-${role === "user" ? "user" : "ai"} px-4 py-2.5 text-sm max-w-[85%]">${text}</div>`;
+  el.className = `flex ${role==="user"?"justify-end":"justify-start"}`;
+  el.innerHTML = `<div class="chat-bubble-${role==="user"?"user":"ai"} px-4 py-2.5 text-sm max-w-[85%]">${text}</div>`;
   document.getElementById("chat-messages").appendChild(el);
   scrollChat();
 }
-
 function scrollChat() {
   const el = document.getElementById("chat-messages");
   el.scrollTop = el.scrollHeight;
 }
-
 function showToast(msg) {
   const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
+  t.textContent = msg; t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 4000);
 }
 </script>
