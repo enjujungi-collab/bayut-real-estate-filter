@@ -2,6 +2,7 @@ import asyncio
 import tempfile
 import os
 import sys
+import threading
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from fastapi import APIRouter, HTTPException
@@ -97,15 +98,30 @@ async def generate_pdf(req: PdfRequest):
 
     enriched = await asyncio.gather(*[enrich(dict(p)) for p in req.properties])
 
-    # PDF 생성
+    # PDF 생성 — 64MB 스택 스레드에서 실행 (ReportLab 레이아웃 엔진 스택 초과 방지)
     try:
         tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
         tmp_path = tmp.name
         tmp.close()
-        await asyncio.to_thread(build_portfolio_pdf, list(enriched), filters, tmp_path, req.language)
+
+        loop = asyncio.get_event_loop()
+        future: asyncio.Future = loop.create_future()
+
+        def _run():
+            try:
+                build_portfolio_pdf(list(enriched), filters, tmp_path, req.language)
+                loop.call_soon_threadsafe(future.set_result, None)
+            except Exception as exc:
+                import traceback; traceback.print_exc()
+                loop.call_soon_threadsafe(future.set_exception, exc)
+
+        old_size = threading.stack_size(64 * 1024 * 1024)   # 64 MB
+        t = threading.Thread(target=_run, daemon=True)
+        threading.stack_size(old_size or 0)
+        t.start()
+        await future
+
     except Exception as e:
-        import traceback
-        traceback.print_exc()   # Render 로그에 전체 스택 출력
         raise HTTPException(status_code=500, detail=f"PDF 생성 오류: {e}")
 
     from datetime import datetime
