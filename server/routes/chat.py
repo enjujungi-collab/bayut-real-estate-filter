@@ -66,12 +66,12 @@ async def chat(req: ChatRequest):
             break
         except RuntimeError:   # rate limit
             if attempt == 2:
-                raise HTTPException(status_code=429, detail="API 요청 한도 초과. 잠시 후 다시 시도해주세요.")
+                raise HTTPException(status_code=429, detail="rate_limit")
             await asyncio.sleep(2.0 * (attempt + 1))
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            raise HTTPException(status_code=502, detail=f"Bayut API 오류: {e}")
+            raise HTTPException(status_code=502, detail="api_error")
 
     properties = properties[:6]
 

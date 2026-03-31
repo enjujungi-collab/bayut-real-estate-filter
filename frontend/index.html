@@ -153,6 +153,8 @@ const UI = {
     baths: (n) => `${n}욕`,
     tabChat: "채팅", tabResults: "매물",
     serverErr: "서버 오류", pdfErr: "PDF 생성 오류", chatErr: "오류: ",
+    rateLimitErr: "API 요청 한도 초과. 잠시 후 다시 시도해주세요.",
+    apiErr: "API 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
   },
   en: {
     subtitle:       "AI Property Search",
@@ -171,6 +173,8 @@ const UI = {
     baths: (n) => `${n} bath`,
     tabChat: "Chat", tabResults: "Results",
     serverErr: "Server error", pdfErr: "PDF error", chatErr: "Error: ",
+    rateLimitErr: "API rate limit reached. Please try again in a moment.",
+    apiErr: "API error. Please try again shortly.",
   },
   zh: {
     subtitle:       "AI 房产搜索",
@@ -189,6 +193,8 @@ const UI = {
     baths: (n) => `${n}卫`,
     tabChat: "对话", tabResults: "房源",
     serverErr: "服务器错误", pdfErr: "PDF错误", chatErr: "错误：",
+    rateLimitErr: "API请求次数已达上限，请稍后再试。",
+    apiErr: "API出现错误，请稍后重试。",
   },
   ar: {
     subtitle:       "البحث عن العقارات بالذكاء الاصطناعي",
@@ -207,6 +213,8 @@ const UI = {
     baths: (n) => `${n} حمام`,
     tabChat: "محادثة", tabResults: "عقارات",
     serverErr: "خطأ في الخادم", pdfErr: "خطأ PDF", chatErr: "خطأ: ",
+    rateLimitErr: "تم تجاوز حد طلبات API. يرجى المحاولة مرة أخرى بعد قليل.",
+    apiErr: "حدث خطأ في API. يرجى المحاولة مجدداً.",
   },
 };
 
@@ -280,7 +288,15 @@ async function sendMessage() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text, history: state.history.slice(-10) }),
     });
-    if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || UI[state.language].serverErr); }
+    if (!resp.ok) {
+      const err = await resp.json();
+      const T = UI[state.language] || UI.en;
+      const detail = err.detail || "";
+      const msg = detail === "rate_limit" ? T.rateLimitErr
+                : detail === "api_error"  ? T.apiErr
+                : T.serverErr;
+      throw new Error(msg);
+    }
     const data = await resp.json();
     appendBubble("assistant", data.reply);
     state.history.push({ role: "assistant", content: data.reply });
