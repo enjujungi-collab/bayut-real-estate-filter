@@ -4,8 +4,11 @@ PDF 포트폴리오 빌더 — 매물당 1페이지 풀레이아웃
 """
 import io
 import os
+import sys
 from datetime import datetime
 from typing import Optional
+
+sys.setrecursionlimit(5000)
 
 import matplotlib
 matplotlib.use("Agg")
