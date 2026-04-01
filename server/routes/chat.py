@@ -73,7 +73,7 @@ async def chat(req: ChatRequest):
         except Exception as e:
             raise HTTPException(status_code=502, detail="api_error")
 
-    properties = properties[:6]
+    properties = properties[:25]
 
     # 5. 응답 직렬화
     def serialize(p):

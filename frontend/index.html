@@ -86,10 +86,15 @@
 
   <!-- 결과 패널 — 모바일: 탭 전환, 데스크톱: flex-1 -->
   <main id="panel-results" class="hidden md:flex flex-col flex-1 overflow-hidden">
-    <div id="action-bar" class="hidden px-4 py-2.5 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
-      <span id="result-summary" class="text-xs text-gray-500"></span>
+    <div id="action-bar" class="hidden px-4 py-2.5 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0 gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <span id="result-summary" class="text-xs text-gray-500 truncate"></span>
+        <button id="select-all-btn" onclick="toggleSelectAll()"
+          class="text-xs text-[#0B2545] border border-[#0B2545] px-2 py-1 rounded-lg hover:bg-[#0B2545] hover:text-white transition flex-shrink-0">
+        </button>
+      </div>
       <button id="pdf-btn" onclick="generatePdf()"
-        class="bg-[#E8A838] text-white px-3 py-1.5 rounded-lg font-medium text-xs hover:bg-[#d4972e] transition flex items-center gap-1.5">
+        class="bg-[#E8A838] text-white px-3 py-1.5 rounded-lg font-medium text-xs hover:bg-[#d4972e] transition flex items-center gap-1.5 flex-shrink-0 disabled:opacity-40">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z"/>
@@ -155,6 +160,9 @@ const UI = {
     serverErr: "서버 오류", pdfErr: "PDF 생성 오류", chatErr: "오류: ",
     rateLimitErr: "API 요청 한도 초과. 잠시 후 다시 시도해주세요.",
     apiErr: "API 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+    selectAll: "전체 선택", deselectAll: "전체 해제",
+    pdfBtnSelected: n => `PDF 생성 (${n}개 선택)`,
+    noneSelected: "매물을 선택하세요",
   },
   en: {
     subtitle:       "AI Property Search",
@@ -175,6 +183,9 @@ const UI = {
     serverErr: "Server error", pdfErr: "PDF error", chatErr: "Error: ",
     rateLimitErr: "API rate limit reached. Please try again in a moment.",
     apiErr: "API error. Please try again shortly.",
+    selectAll: "Select All", deselectAll: "Deselect All",
+    pdfBtnSelected: n => `Generate PDF (${n} selected)`,
+    noneSelected: "Select properties",
   },
   zh: {
     subtitle:       "AI 房产搜索",
@@ -195,6 +206,9 @@ const UI = {
     serverErr: "服务器错误", pdfErr: "PDF错误", chatErr: "错误：",
     rateLimitErr: "API请求次数已达上限，请稍后再试。",
     apiErr: "API出现错误，请稍后重试。",
+    selectAll: "全选", deselectAll: "取消全选",
+    pdfBtnSelected: n => `生成PDF (已选${n}套)`,
+    noneSelected: "请选择房源",
   },
   ar: {
     subtitle:       "البحث عن العقارات بالذكاء الاصطناعي",
@@ -215,12 +229,16 @@ const UI = {
     serverErr: "خطأ في الخادم", pdfErr: "خطأ PDF", chatErr: "خطأ: ",
     rateLimitErr: "تم تجاوز حد طلبات API. يرجى المحاولة مرة أخرى بعد قليل.",
     apiErr: "حدث خطأ في API. يرجى المحاولة مجدداً.",
+    selectAll: "تحديد الكل", deselectAll: "إلغاء التحديد",
+    pdfBtnSelected: n => `إنشاء PDF (${n} محدد)`,
+    noneSelected: "اختر عقارات",
   },
 };
 
 const state = {
   history: [], properties: [], filters: null,
   language: "ko", loading: false, pdfLoading: false, _total: 0,
+  selectedIds: new Set(),
 };
 
 // ── 모바일 탭 전환 ─────────────────────────────────────────────
@@ -257,7 +275,7 @@ function setLang(lang) {
   if (chips) chips.innerHTML = T.chips.map(c => `<div class="chip text-xs" onclick="sendChip(this)">${c}</div>`).join("");
   document.getElementById("msg-input").placeholder = T.placeholder;
   if (!state.loading) document.getElementById("send-btn").textContent = T.send;
-  if (!state.pdfLoading) document.getElementById("pdf-btn-label").textContent = T.pdfBtn;
+  if (!state.pdfLoading) updateSelectionUI();
   document.getElementById("empty-hint").textContent = T.emptyHint;
   document.getElementById("tab-chat-label").textContent = T.tabChat;
   document.getElementById("tab-results-label").textContent = T.tabResults;
@@ -316,7 +334,8 @@ async function sendMessage() {
 }
 
 async function generatePdf() {
-  if (!state.properties.length || state.pdfLoading) return;
+  const selected = state.properties.filter(p => state.selectedIds.has(p.id));
+  if (!selected.length || state.pdfLoading) return;
   const T = UI[state.language] || UI.en;
   state.pdfLoading = true;
   const btn = document.getElementById("pdf-btn");
@@ -328,7 +347,7 @@ async function generatePdf() {
   try {
     const resp = await fetch("/api/pdf", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ properties: state.properties, filters: state.filters, language: state.language }),
+      body: JSON.stringify({ properties: selected, filters: state.filters, language: state.language }),
     });
     if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || T.pdfErr); }
     const blob = await resp.blob();
@@ -341,11 +360,12 @@ async function generatePdf() {
   } finally {
     state.pdfLoading = false;
     const T2 = UI[state.language] || UI.en;
+    const n2 = state.selectedIds.size;
     btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
         d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z"/></svg>
-      <span id="pdf-btn-label">${T2.pdfBtn}</span>`;
-    btn.disabled = false;
+      <span id="pdf-btn-label">${n2 > 0 ? T2.pdfBtnSelected(n2) : T2.noneSelected}</span>`;
+    btn.disabled = n2 === 0;
   }
 }
 
@@ -362,22 +382,27 @@ function renderCards(properties, total) {
     badge.classList.add("hidden");
     return;
   }
+  // 새 결과 로딩 시 전체 선택
+  state.selectedIds = new Set(properties.map(p => p.id));
+
   empty.classList.add("hidden");
   grid.classList.remove("hidden");
   bar.classList.remove("flex","hidden"); bar.classList.add("flex");
   summary.textContent = T.summary(properties.length, total);
-  // 모바일 배지
   badge.textContent = properties.length;
   badge.classList.remove("hidden");
 
+  let html = "";
   properties.forEach((p, i) => {
     const thumb  = p.photos?.[0] || "";
     const status = p.is_completed === true ? T.completed : p.is_completed === false ? T.offPlan : "";
     const purpose = p.purpose === "for-sale" ? T.forSale : T.forRent;
     const purposeClass = p.purpose === "for-sale" ? "badge-sale" : "badge-rent";
     const amenities = (p.amenities||[]).slice(0,3).join(" · ");
-    grid.innerHTML += `
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition group">
+    const sel = state.selectedIds.has(p.id);
+    html += `
+    <div id="card-${p.id}" onclick="toggleSelect('${p.id}')" class="bg-white rounded-2xl shadow-sm overflow-hidden transition group cursor-pointer
+      ${sel ? 'border-2 border-[#E8A838] shadow-md' : 'border border-gray-100 hover:shadow-md'}">
       <div class="relative">
         ${thumb ? `<img src="${thumb}" class="card-img group-hover:scale-105 transition duration-300" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />` : ""}
         <div class="card-img bg-gray-100 items-center justify-center text-gray-300 text-sm ${thumb?"hidden":"flex"}">${T.noImage}</div>
@@ -385,7 +410,10 @@ function renderCards(properties, total) {
           <span class="text-xs px-2 py-0.5 rounded-full font-medium ${purposeClass}">${purpose}</span>
           ${status ? `<span class="text-xs px-2 py-0.5 rounded-full bg-white text-gray-600 border">${status}</span>` : ""}
         </div>
-        <div class="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">#${i+1}</div>
+        <div class="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition
+          ${sel ? 'bg-[#E8A838] text-white' : 'bg-black/60 text-white'}">
+          ${sel ? '✓' : (i+1)}
+        </div>
       </div>
       <div class="p-4">
         <div class="text-lg font-bold text-[#E8A838] mb-0.5">${p.price_formatted||"-"}</div>
@@ -403,13 +431,75 @@ function renderCards(properties, total) {
           <span>📐 ${p.area_formatted}</span>
         </div>
         ${amenities ? `<div class="text-xs text-gray-400 truncate mb-3">${amenities}</div>` : ""}
-        <a href="${p.url}" target="_blank"
+        <a href="${p.url}" target="_blank" onclick="event.stopPropagation()"
            class="block text-center text-xs bg-[#0B2545] text-white py-2 rounded-lg hover:bg-[#1a3a6a] transition active:bg-[#1a3a6a]">
           ${T.viewBtn}
         </a>
       </div>
     </div>`;
   });
+  grid.innerHTML = html;
+  updateSelectionUI();
+}
+
+function toggleSelect(id) {
+  if (state.selectedIds.has(id)) {
+    state.selectedIds.delete(id);
+  } else {
+    state.selectedIds.add(id);
+  }
+  // 카드 테두리 업데이트
+  const card = document.getElementById("card-" + id);
+  if (card) {
+    const sel = state.selectedIds.has(id);
+    const idx = state.properties.findIndex(p => p.id === id);
+    card.className = card.className.replace(/border-2 border-\[#E8A838\] shadow-md|border border-gray-100 hover:shadow-md/g,
+      sel ? 'border-2 border-[#E8A838] shadow-md' : 'border border-gray-100 hover:shadow-md');
+    const badge = card.querySelector(".absolute.top-2.right-2");
+    if (badge) {
+      badge.className = badge.className.replace(/bg-\[#E8A838\] text-white|bg-black\/60 text-white/g,
+        sel ? 'bg-[#E8A838] text-white' : 'bg-black/60 text-white');
+      badge.textContent = sel ? '✓' : (idx >= 0 ? idx + 1 : "");
+    }
+  }
+  updateSelectionUI();
+}
+
+function toggleSelectAll() {
+  const T = UI[state.language] || UI.en;
+  const allSelected = state.selectedIds.size === state.properties.length;
+  if (allSelected) {
+    state.selectedIds.clear();
+  } else {
+    state.selectedIds = new Set(state.properties.map(p => p.id));
+  }
+  // 카드 전체 재렌더
+  state.properties.forEach((p, i) => {
+    const card = document.getElementById("card-" + p.id);
+    if (!card) return;
+    const sel = state.selectedIds.has(p.id);
+    card.className = card.className.replace(/border-2 border-\[#E8A838\] shadow-md|border border-gray-100 hover:shadow-md/g,
+      sel ? 'border-2 border-[#E8A838] shadow-md' : 'border border-gray-100 hover:shadow-md');
+    const badge = card.querySelector(".absolute.top-2.right-2");
+    if (badge) {
+      badge.className = badge.className.replace(/bg-\[#E8A838\] text-white|bg-black\/60 text-white/g,
+        sel ? 'bg-[#E8A838] text-white' : 'bg-black/60 text-white');
+      badge.textContent = sel ? '✓' : (i + 1);
+    }
+  });
+  updateSelectionUI();
+}
+
+function updateSelectionUI() {
+  const T = UI[state.language] || UI.en;
+  const n = state.selectedIds.size;
+  const total = state.properties.length;
+  const pdfBtn = document.getElementById("pdf-btn");
+  const pdfLabel = document.getElementById("pdf-btn-label");
+  const selectBtn = document.getElementById("select-all-btn");
+  if (pdfLabel) pdfLabel.textContent = n > 0 ? T.pdfBtnSelected(n) : T.noneSelected;
+  if (pdfBtn) pdfBtn.disabled = n === 0;
+  if (selectBtn) selectBtn.textContent = n === total ? T.deselectAll : T.selectAll;
 }
 
 function setLoading(on) {
