@@ -56,14 +56,35 @@ async def _fetch_price_trend(location_id: int, bedrooms: Optional[int]) -> list[
             if resp.status_code != 200:
                 return []
             data = resp.json()
-            graph = (data.get("data", {}).get("data", {})
-                     .get("attributes", {}).get("graph", {}).get("1Y", []))
+            # Try multiple nesting paths the API might return
+            attrs = (data.get("data", {}).get("data", {}).get("attributes", {})
+                     or data.get("data", {}).get("attributes", {})
+                     or data.get("attributes", {}))
+            graph = attrs.get("graph", {}).get("1Y", []) or attrs.get("graph", [])
+            if not graph:
+                return []
+
+            # bedroom_id may be int or string in API response
             bed_id = bedrooms if bedrooms is not None else 2
-            filtered = [g for g in graph if g.get("bedroom_id") == bed_id]
+            filtered = [g for g in graph
+                        if g.get("bedroom_id") == bed_id
+                        or str(g.get("bedroom_id", "")) == str(bed_id)]
             if not filtered:
-                filtered = graph[:12]
-            return [{"period": g["period"], "value": g["community_price"]}
-                    for g in filtered if g.get("community_price")]
+                filtered = graph  # fallback: use all bedroom types
+
+            # community_price may have different field names
+            result = []
+            for g in filtered:
+                val = (g.get("community_price") or g.get("median_price")
+                       or g.get("avg_price") or g.get("price"))
+                period = g.get("period") or g.get("month") or g.get("date")
+                if val and period:
+                    result.append({"period": str(period), "value": float(val)})
+            # deduplicate by period, keep latest value
+            seen = {}
+            for r in result:
+                seen[r["period"]] = r["value"]
+            return [{"period": k, "value": v} for k, v in list(seen.items())[:12]]
     except Exception:
         return []
 

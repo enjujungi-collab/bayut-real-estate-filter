@@ -82,14 +82,22 @@ async def generate_pdf(req: PdfRequest):
                 pass
         p_dict["market"] = market
 
-        # 지도 이미지 — 주소에서 핵심 지역명만 추출 (Nominatim 검색 정확도 향상)
+        # 지도 이미지 — 좁은 범위부터 넓은 범위로 fallback 시도
         map_bytes = None
         try:
             raw_loc = p_dict.get("location") or location_name
-            # "DEC Tower 2, DEC Towers, Dubai Marina, Dubai" → "Dubai Marina, Dubai"
-            parts = [p.strip() for p in raw_loc.split(",")]
-            map_query = ", ".join(parts[-2:]) if len(parts) >= 2 else raw_loc
-            map_bytes = await fetch_map_image(map_query)
+            parts = [p.strip() for p in raw_loc.split(",") if p.strip()]
+            # 시도 순서: 마지막 2개 → 마지막 1개(도시) → "Dubai"
+            queries = []
+            if len(parts) >= 2:
+                queries.append(", ".join(parts[-2:]))
+            if parts:
+                queries.append(parts[-1])
+            queries.append("Dubai")
+            for q in queries:
+                map_bytes = await fetch_map_image(q)
+                if map_bytes:
+                    break
         except Exception:
             pass
         p_dict["map_bytes"] = map_bytes
