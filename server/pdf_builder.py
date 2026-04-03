@@ -279,26 +279,19 @@ def _property_page(idx: int, p: dict, lang: str = "ko") -> list:
     elems.append(hdr)
     elems.append(HRFlowable(width="100%", thickness=1.5, color=CG, spaceAfter=4))
 
-    # ② 이미지 — 행 1: 대형 2장, 행 2: 소형 최대 3장
-    BIG_H = 75 * mm
-    SML_H = 50 * mm
-    all_photos = photos[:5]
+    # ② 이미지 스트립 (있는 개수만큼, 없으면 배너로 대체)
+    IMG_H = 50 * mm
+    n_slots = max(len(photos), 1) if photos else 0
+    n_slots = min(n_slots, 5)
+    loaded = [_load_img(u, CW_/max(n_slots,1) - 2, IMG_H - 2) for u in photos[:n_slots]]
+    loaded = [x for x in loaded if x]
 
-    big_photos = all_photos[:2]
-    sml_photos = all_photos[2:]
-
-    def _img_row(urls, row_h):
-        n = len(urls)
-        if not n:
-            return None
-        w = CW_ / n
-        imgs = [_load_img(u, w - 2, row_h - 2) for u in urls]
-        imgs = [x for x in imgs if x]
-        if not imgs:
-            return None
-        iw = CW_ / len(imgs)
-        tbl = Table([imgs], colWidths=[iw]*len(imgs), rowHeights=[row_h])
-        tbl.setStyle(TableStyle([
+    if loaded:
+        # 이미지가 있을 때: 있는 개수만큼 칸 구성
+        img_w = CW_ / len(loaded)
+        cells = loaded
+        img_strip = Table([cells], colWidths=[img_w]*len(loaded), rowHeights=[IMG_H])
+        img_strip.setStyle(TableStyle([
             ("ALIGN",        (0,0),(-1,-1), "CENTER"),
             ("VALIGN",       (0,0),(-1,-1), "MIDDLE"),
             ("TOPPADDING",   (0,0),(-1,-1), 1),
@@ -307,16 +300,7 @@ def _property_page(idx: int, p: dict, lang: str = "ko") -> list:
             ("RIGHTPADDING", (0,0),(-1,-1), 1),
             ("BOX",          (0,0),(-1,-1), 0.3, CB),
         ]))
-        return tbl
-
-    row1 = _img_row(big_photos, BIG_H)
-    row2 = _img_row(sml_photos, SML_H) if sml_photos else None
-
-    if row1:
-        elems.append(row1)
-        if row2:
-            elems.append(Spacer(1, 1.5*mm))
-            elems.append(row2)
+        elems.append(img_strip)
     else:
         # 이미지 없을 때: 정보 배너
         prop_url = p.get("url", "")
@@ -328,71 +312,104 @@ def _property_page(idx: int, p: dict, lang: str = "ko") -> list:
                 _s("bi", fontSize=10, textColor=CN, fontName=FB, leading=14, alignment=1)
             ),
             Spacer(1, 3*mm),
-            Paragraph(T["view_photos"],
-                      _s("bm", fontSize=8, textColor=CM, leading=12, alignment=1)),
+            Paragraph(
+                T["view_photos"],
+                _s("bm", fontSize=8, textColor=CM, leading=12, alignment=1)
+            ),
         ]
         if prop_url:
+            from reportlab.platypus import Paragraph as P_
             banner_lines.append(
-                Paragraph(f'<link href="{prop_url}"><u>{prop_url}</u></link>',
-                          _s("bu", fontSize=7, textColor=CLINK, leading=11, alignment=1))
+                P_(f'<link href="{prop_url}"><u>{prop_url}</u></link>',
+                   _s("bu", fontSize=7, textColor=CLINK, leading=11, alignment=1))
             )
-        banner_tbl = Table([[banner_lines]], colWidths=[CW_], rowHeights=[BIG_H])
+        banner_tbl = Table([[banner_lines]], colWidths=[CW_], rowHeights=[IMG_H])
         banner_tbl.setStyle(TableStyle([
-            ("BACKGROUND",    (0,0),(-1,-1), CL),
-            ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
-            ("BOX",           (0,0),(-1,-1), 0.5, CB),
-            ("TOPPADDING",    (0,0),(-1,-1), 10),
-            ("BOTTOMPADDING", (0,0),(-1,-1), 10),
+            ("BACKGROUND", (0,0),(-1,-1), CL),
+            ("VALIGN",     (0,0),(-1,-1), "MIDDLE"),
+            ("BOX",        (0,0),(-1,-1), 0.5, CB),
+            ("TOPPADDING", (0,0),(-1,-1), 10),
+            ("BOTTOMPADDING",(0,0),(-1,-1), 10),
         ]))
         elems.append(banner_tbl)
-    elems.append(Spacer(1, 2*mm))
+    elems.append(Spacer(1, 3*mm))
 
-    # ③ 간결 정보 바 (스펙 테이블 대체)
-    status = T["completed"] if p.get("is_completed") else (T["off_plan"] if p.get("is_completed") is False else "")
+    # ③ 스펙 테이블 + 지도 (좌우)
+    SPEC_W = CW_ * 0.55
+    MAP_W  = CW_ * 0.42
+    MAP_H  = 52 * mm
+
+    status = T["completed"] if p.get("is_completed") else (T["off_plan"] if p.get("is_completed") is False else "-")
     purpose_str = T["for_sale"] if p.get("purpose") == "for-sale" else T["for_rent"]
     beds_label = ("Studio" if bedrooms == 0 else f"{bedrooms}BR") if bedrooms is not None else "-"
+    floor_unit = T["floor_unit"]
     baths_val = p.get("bathrooms")
-    info_parts = [
-        f"🛏  {beds_label}",
-        f"🚿  {baths_val}" if baths_val else None,
-        f"📐  {area_sqft:,.0f} ft²" if area_sqft else None,
-        purpose_str,
-        status if status else None,
-        f"{yield_pct}% yield" if yield_pct else None,
-        f"Ref: {p.get('permit_number')}" if p.get("permit_number") else None,
-    ]
-    info_line = "   ·   ".join(x for x in info_parts if x)
-    info_bar = Table([[Paragraph(info_line,
-                                 _s("ib", fontSize=8, textColor=CT, leading=12))
-                       ]], colWidths=[CW_])
-    info_bar.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),(-1,-1), CL),
-        ("TOPPADDING",    (0,0),(-1,-1), 5),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 5),
-        ("LEFTPADDING",   (0,0),(-1,-1), 8),
-        ("BOX",           (0,0),(-1,-1), 0.3, CB),
-    ]))
-    elems.append(info_bar)
-    elems.append(Spacer(1, 2*mm))
+    baths_str = (f"{baths_val}{floor_unit}" if floor_unit else str(baths_val)) if baths_val else "-"
 
-    # ④ 지도 (전체 폭)
-    MAP_W = CW_
-    MAP_H = 60 * mm
+    def _floor_str():
+        fl = p.get("floor")
+        if not fl:
+            return "-"
+        tf = p.get("total_floors")
+        if floor_unit:
+            return f"{fl}{floor_unit}" + (f"/{tf}{floor_unit}" if tf else "")
+        return str(fl) + (f"/{tf}" if tf else "")
+
+    spec_rows = [
+        (T["price_k"],    _fmt_price(price, p.get("currency","AED")),
+         T["beds_k"],     beds_label),
+        (T["est_value"],  _fmt_price(est_val, "AED") if est_val else T["analyzing"],
+         T["baths_k"],    baths_str),
+        (T["yield_k"],    f"{yield_pct}%" if yield_pct else "-",
+         T["area_k"],     f"{area_sqft:,.0f} ft²" if area_sqft else "-"),
+        (T["purpose_k"],  purpose_str,
+         T["type_k"],     category),
+        (T["status_k"],   status,
+         T["furnish_k"],  p.get("furnishing") or "-"),
+        (T["floor_k"],    _floor_str(),
+         T["ref_k"],      p.get("permit_number") or "-"),
+    ]
+    spec_data = [[Paragraph(k1,S["lbl"]),Paragraph(v1,S["val"]),
+                  Paragraph(k2,S["lbl"]),Paragraph(v2,S["val"])]
+                 for k1,v1,k2,v2 in spec_rows]
+    col_spec = [SPEC_W*r for r in [0.22, 0.28, 0.22, 0.28]]
+    spec_tbl = Table(spec_data, colWidths=col_spec)
+    spec_tbl.setStyle(TableStyle([
+        ("TOPPADDING",    (0,0),(-1,-1), 3),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+        ("LEFTPADDING",   (0,0),(-1,-1), 5),
+        ("VALIGN",        (0,0),(-1,-1), "TOP"),
+        ("LINEBELOW",     (0,0),(-1,-2), 0.3, CB),
+        ("ROWBACKGROUNDS",(0,0),(-1,-1), [CW, CL]),
+    ]))
+
+    # 지도 이미지
     if map_bytes:
         map_img = Image(io.BytesIO(map_bytes))
-        ratio = min((MAP_W - 4) / map_img.imageWidth, (MAP_H - 4) / map_img.imageHeight)
+        ratio = min((MAP_W-4) / map_img.imageWidth, (MAP_H-4) / map_img.imageHeight)
         map_img.drawWidth  = map_img.imageWidth  * ratio
         map_img.drawHeight = map_img.imageHeight * ratio
         map_cell = map_img
     else:
-        map_cell = _placeholder(MAP_W - 4, MAP_H - 4, T["no_map"])
+        map_cell = _placeholder(MAP_W-4, MAP_H-4, T["no_map"])
+
     map_tbl = Table([[map_cell]], colWidths=[MAP_W], rowHeights=[MAP_H])
     map_tbl.setStyle(TableStyle([
         ("ALIGN",  (0,0),(-1,-1), "CENTER"),
         ("VALIGN", (0,0),(-1,-1), "MIDDLE"),
         ("BOX",    (0,0),(-1,-1), 0.5, CB),
     ]))
-    elems.append(map_tbl)
+
+    two_col = Table([[spec_tbl, map_tbl]], colWidths=[SPEC_W, MAP_W])
+    two_col.setStyle(TableStyle([
+        ("VALIGN",        (0,0),(-1,-1), "TOP"),
+        ("LEFTPADDING",   (0,0),(-1,-1), 0),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 0),
+        ("TOPPADDING",    (0,0),(-1,-1), 0),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 0),
+        ("COLPADDING",    (0,0),(-1,-1), 4),
+    ]))
+    elems.append(two_col)
     elems.append(Spacer(1, 3*mm))
 
     # ④ 가격 차트
