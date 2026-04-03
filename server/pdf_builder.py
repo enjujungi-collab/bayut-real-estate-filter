@@ -177,7 +177,8 @@ def _mpl_font(lang: str):
 
 # ── 가격 차트 ─────────────────────────────────────────────────
 def _price_chart(price_history: list, prop_psf: Optional[float],
-                 w_pts: float, h_pts: float, lang: str = "ko") -> Optional[Image]:
+                 w_pts: float, h_pts: float, lang: str = "ko",
+                 purpose: str = "for-sale") -> Optional[Image]:
     if not price_history:
         return None
     DPI = 150
@@ -204,10 +205,14 @@ def _price_chart(price_history: list, prop_psf: Optional[float],
     ax.set_ylabel("AED / ft²", fontsize=6, color="#6B7C93")
     T_chart = _t(lang)
     fp = _mpl_font(lang)
+    is_rent = purpose == "for-rent"
+    chart_title = T_chart.get("price_chart_title_rent", T_chart["price_chart_title"]) if is_rent else T_chart["price_chart_title"]
+    y_label = "AED / year" if is_rent else "AED / ft²"
     title_kw = {"fontsize": 7, "color": "#0B2545", "pad": 4}
     if fp:
         title_kw["fontproperties"] = fp
-    ax.set_title(T_chart["price_chart_title"], **title_kw)
+    ax.set_title(chart_title, **title_kw)
+    ax.set_ylabel(y_label, fontsize=6, color="#6B7C93")
     ax.grid(axis="y", linestyle="--", alpha=0.4, zorder=0)
     ax.spines[:].set_visible(False)
 
@@ -409,7 +414,7 @@ def _property_page(idx: int, p: dict, lang: str = "ko") -> list:
 
     # ④ 가격 차트
     CHART_H = 38 * mm
-    chart = _price_chart(ph_data, prop_psf, CW_, CHART_H, lang)
+    chart = _price_chart(ph_data, prop_psf, CW_, CHART_H, lang, purpose=p.get("purpose","for-sale"))
     if chart:
         elems.append(chart)
     else:
@@ -494,6 +499,7 @@ TRANSLATIONS = {
         "date_fmt": "%Y년 %m월 %d일  %H:%M",
         "no_limit": "제한없음", "any_rooms": "상관없음",
         "price_chart_title": "가격 변동 이력 (ft²당 중앙 거래가)",
+        "price_chart_title_rent": "임대가 추이 (AED/년)",
         "this_prop": "이 매물", "floor_unit": "층",
     },
     "en": {
@@ -521,6 +527,7 @@ TRANSLATIONS = {
         "date_fmt": "%B %d, %Y  %H:%M",
         "no_limit": "No limit", "any_rooms": "Any",
         "price_chart_title": "Price Trend (Median AED/ft²)",
+        "price_chart_title_rent": "Rental Price Trend (AED/year)",
         "this_prop": "This listing", "floor_unit": "",
     },
     "zh": {
@@ -548,6 +555,7 @@ TRANSLATIONS = {
         "date_fmt": "%Y年%m月%d日  %H:%M",
         "no_limit": "不限", "any_rooms": "不限",
         "price_chart_title": "价格趋势 (中位价 AED/ft²)",
+        "price_chart_title_rent": "租金趋势 (AED/年)",
         "this_prop": "此房源", "floor_unit": "层",
     },
     "ar": {
@@ -575,6 +583,7 @@ TRANSLATIONS = {
         "date_fmt": "%Y/%m/%d  %H:%M",
         "no_limit": "غير محدود", "any_rooms": "أي",
         "price_chart_title": "اتجاه الأسعار (AED/ft²)",
+        "price_chart_title_rent": "اتجاه الإيجار (AED/سنة)",
         "this_prop": "هذا العقار", "floor_unit": "",
     },
 }

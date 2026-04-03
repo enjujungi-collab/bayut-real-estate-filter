@@ -77,6 +77,7 @@ async def generate_pdf(req: PdfRequest):
                     area_sqft=p_dict.get("area_sqft"),
                     sale_price=p_dict.get("price", 0),
                     lang=req.language,
+                    purpose=(p_dict.get("purpose") or filters_dict.get("purpose", "for-sale")),
                 )
             except Exception:
                 pass

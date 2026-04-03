@@ -47,16 +47,25 @@ async def _fetch_rent_avg(location_id: int, bedrooms: Optional[int]) -> Optional
         return None
 
 
-async def _fetch_price_trend(location_id: int, bedrooms: Optional[int]) -> list[dict]:
-    """월별 sqft당 가격 추이 (1Y)"""
+async def _fetch_price_trend(location_id: int, bedrooms: Optional[int],
+                             purpose: str = "for-sale",
+                             category: str = "apartments") -> list[dict]:
+    """월별 가격 추이 (1Y) — 매매: AED/ft², 임대: AED/year"""
+    transaction_type = "rented" if purpose == "for-rent" else "sold"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
+            params = {
+                "location_id": location_id,
+                "transaction_type": transaction_type,
+                "category": category,
+            }
+            if bedrooms is not None:
+                params["bedrooms"] = bedrooms
             resp = await client.get(f"{BASE_URL}/price-trend-of-location",
-                                    params={"location_id": location_id}, headers=_headers())
+                                    params=params, headers=_headers())
             if resp.status_code != 200:
                 return []
             data = resp.json()
-            # Try multiple nesting paths the API might return
             attrs = (data.get("data", {}).get("data", {}).get("attributes", {})
                      or data.get("data", {}).get("attributes", {})
                      or data.get("attributes", {}))
@@ -64,15 +73,14 @@ async def _fetch_price_trend(location_id: int, bedrooms: Optional[int]) -> list[
             if not graph:
                 return []
 
-            # bedroom_id may be int or string in API response
+            # bedroom_id may be int or string
             bed_id = bedrooms if bedrooms is not None else 2
             filtered = [g for g in graph
                         if g.get("bedroom_id") == bed_id
                         or str(g.get("bedroom_id", "")) == str(bed_id)]
             if not filtered:
-                filtered = graph  # fallback: use all bedroom types
+                filtered = graph  # fallback: all bedroom types
 
-            # community_price may have different field names
             result = []
             for g in filtered:
                 val = (g.get("community_price") or g.get("median_price")
@@ -80,7 +88,6 @@ async def _fetch_price_trend(location_id: int, bedrooms: Optional[int]) -> list[
                 period = g.get("period") or g.get("month") or g.get("date")
                 if val and period:
                     result.append({"period": str(period), "value": float(val)})
-            # deduplicate by period, keep latest value
             seen = {}
             for r in result:
                 seen[r["period"]] = r["value"]
@@ -140,10 +147,11 @@ async def get_market_data(
     area_sqft: Optional[float],
     sale_price: int,
     lang: str = "ko",
+    purpose: str = "for-sale",
 ) -> dict:
     rent_avg, price_history = await asyncio.gather(
         _fetch_rent_avg(location_id, bedrooms),
-        _fetch_price_trend(location_id, bedrooms),
+        _fetch_price_trend(location_id, bedrooms, purpose=purpose, category=category),
     )
 
     # 임대 수익률
