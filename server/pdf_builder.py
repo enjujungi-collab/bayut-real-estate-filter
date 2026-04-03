@@ -412,14 +412,12 @@ def _property_page(idx: int, p: dict, lang: str = "ko") -> list:
     elems.append(two_col)
     elems.append(Spacer(1, 3*mm))
 
-    # ④ 가격 차트
+    # ④ 가격 차트 (데이터 없으면 섹션 자체 생략)
     CHART_H = 38 * mm
     chart = _price_chart(ph_data, prop_psf, CW_, CHART_H, lang, purpose=p.get("purpose","for-sale"))
     if chart:
         elems.append(chart)
-    else:
-        elems.append(_placeholder(CW_, CHART_H, T["no_data"]))
-    elems.append(Spacer(1, 3*mm))
+        elems.append(Spacer(1, 3*mm))
 
     # ⑤ 시장 분석 + 시설
     amenities_str = "   ·   ".join((p.get("amenities") or []))
